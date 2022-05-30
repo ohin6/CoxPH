@@ -1,5 +1,6 @@
 require(rms)
 require(tidyverse)
+require(plotly)
 
 
 ##################
@@ -30,11 +31,12 @@ nrow(prostate)
 prostate %>% count(status)
 sum(prostate$status != 'alive', na.rm=TRUE)
 
-table(status)
+table(rx)
 
 # is there missing values?????
 tibble(prostate) %>% 
   filter(if_any(everything(), is.na)) # 27 rows with missing data
+
 
 
 ##########################
@@ -45,11 +47,10 @@ tibble(prostate) %>%
 ###########################
 
 # predict missing values based on other scores
-w = transcan(~ sz + sg + ap + sbp + dbp + age + wt + hg + ekg + pf + bm + hx,
-             imputed = TRUE, data = prostate, pl = FALSE, pr = FALSE)
 
 w = transcan(~ sz + sg + ap + sbp + dbp + age + wt + hg + ekg + pf + bm + hx,
              imputed = TRUE, trantab=TRUE, data = prostate, pl = FALSE, pr = FALSE)
+summary(w)
 
 attach(prostate)
 sz = impute(w, sz, data = prostate)
@@ -58,9 +59,12 @@ age = impute(w, age, data = prostate)
 wt = impute(w, wt, data = prostate)
 ekg = impute(w, ekg, data = prostate)
 
+ekg
 
 dd = datadist(prostate); options(datadist = 'dd')
 units(dtime) = 'Month'
+dd
+
 
 #############
 # Questions #
@@ -75,8 +79,11 @@ imputed = TRUE, trantab=TRUE,data = prostate, pl = FALSE, pr = FALSE)
 ##** you can then plot the transformations to see the strength of the associations of 
 ##*each variable with all the others. If the R^2 is small, it means the variable is mostly predicted
 ##*by their median or modal values from the marginal distribution
-windows();ggplot(w,scale=TRUE)+theme(axis.text.x=element_text(size=6))
+
+ggplotly(ggplot(w,scale=TRUE)+theme(axis.text.x=element_text(size=6)))
 ##**
+
+ggplot(w)
 
 # 2) Is there a way to check if the transcan function worked, as I am unsure
 # if this is the case.
@@ -89,6 +96,41 @@ windows();ggplot(w,scale=TRUE)+theme(axis.text.x=element_text(size=6))
 ##* other rms function (for example levels of a factor variable, units, minima, maxima etc.)
 ##* You may want to check Chapter 3 of Harrel's book for more details on missing data issues
 #############
+
+
+################
+# Kaplen Meier #
+################
+#* Create and plot a Kaplen Meier survival curve between survival and treatment
+#* type (rx) where there are 4 treatment types: placebo, 0.2mg, 1mg and 5mg.
+#* Whilst informative, this is limited in scope as it does not consider other
+#* predictors which may influence results at each level.
+
+# create survival object 
+S = Surv(dtime, status %nin% 'alive')
+#fit kaplan-Meier
+f.kap = npsurv(S~rx)
+
+# Plot
+survplotp(f.kap, conf = NULL)
+
+
+# perform logrank test
+survdiff(S~rx)
+
+##################
+# Interpretation #
+##################
+
+#* Visually it can be seen that 1mg of oestrogen increased survival time 
+#* compared to control. Whereas 0.2mg and 5mg appears to have no affect.
+#* 
+#* To test whether this was significant a logrank test can be performed. 
+#* Here we can see there was a P-value of less than 0.05 meaning that there is
+#*  evidence to suggest that there is a signiciant difference in survival 
+#*  between treatment types.
+
+
 
 #####################################################
 # test whether full model (survival) is appropriate #
@@ -103,9 +145,17 @@ S = Surv(dtime, status != 'alive')
 f = cph(S ~ rx + rcs(age, 4) + rcs(wt, 4) + pf + hx + rcs(sbp, 4) + rcs(dbp, 4) +
           ekg + rcs(hg, 4) + rcs(sg, 4) + rcs(sz, 4) + rcs(log(ap), 4) + bm)
 
+fx = cph(S ~ rx + rcs(age, 3) + rcs(wt, 3) + pf + hx + rcs(sbp, 3) + rcs(dbp, 3) +
+          ekg + rcs(hg, 3) + rcs(sg, 3) + rcs(sz, 3) + rcs(log(ap), 5) + bm)
+
+f2 = cph(S ~ rx + rcs(age,3) + rcs(wt, 3) + pf.coded + heart + rcs(map,3) +
+           rcs(hg, 4) + rcs(sg, 3) + rcs(sz, 3) + rcs(log(ap), 5) + bm)
+
+anova(fx)
+
 print(f, latex = TRUE, coefs = FALSE)
 
-
+stepAIC(f)
 
 ###################
 ## Interpretation #
@@ -216,13 +266,13 @@ f.short = cph(S ~ z, x = TRUE, y= TRUE)
 
 ## Compute shoenfields residuals for each variable
 # test the proportional hazard assumption using the cox.zph() function
-phtest = cox.zph(f.short, transform = 'identity')
-phtest
+phtest = cox.zph(f.short, transform = 'identity', terms = FALSE)
+summary(phtest)
 plot(phtest, var = 'rx')
 ##* To make it work, the phtest variable should be defined with:
 phtest = cox.zph(f.short, transform = 'identity',terms=FALSE)
-plot(phtest, var = 'rx')
-abline(h=0, col = 2)
+plot(phtest, var = 'wt')
+
 # couldn't get to work - some reason phtest is not comparing different variables
 
 ######################
@@ -260,7 +310,7 @@ z.other = z[, -1] #all other columns
 ## compare model
 #
 f.ia = cph(S ~ z.dose * z.other)
-options(prType='latex') # options(prType='plain') to restore the default
+options(prType='plain') # options(prType='plain') to restore the default
 latex(anova(f2), file='', label = 'tab:coxcase-anova1')
 options(prType='plain')
 # cant get above code to work
@@ -289,7 +339,10 @@ options(prType='plain')
 ################################
 
 # 
-ggplot(predict(f2), sepdiscrete='vertical', nlevels=4, vnames='names')
+ggplot(Predict(f2, ref.zero = TRUE), sepdiscrete='vertical', nlevels=4, vnames='names')
+
+a = anova(f2)
+plot(a)
 
 ##################
 # validate model #
@@ -311,9 +364,25 @@ print(v)
 # calibrate #
 #############
 
+f2 = update(f2, time.inc = 60)
 cal = calibrate(f2, B=300, u=5*12, maxdim = 4)
 plot(cal, subtitles = FALSE)
-cal = calibrate(f2, cmethod = 'KM', u = 5*12, B = 120)
+abline(h=0.5, col="grey", lty = 2, cex = 1.5)
+abline(v=0.54, col = 'grey', lty = 2, cex = 0.5)
+legend(0.55,0.1, legend = c('Expected', 'Observed'), col=c("black", "blue"), lty = 1, cex=0.8)
+#add confidence interval
+cal = calibrate(f2, cmethod = 'KM', u = 5*12, B = 150)
+plot(cal, add = TRUE)
+
+# calibrate at 24 months survival
+
+f2 = update(f2, time.inc = 24)
+cal = calibrate(f2, B=300, u=24, maxdim = 4)
+plot(cal, subtitles = FALSE)
+abline(h=0.5, col="grey", lty = 2, cex = 1.5)
+abline(v=0.455, col = 'grey', lty = 2, cex = 0.5)
+legend(0.7,0.3, legend = c('Expected', 'Observed'), col=c("black", "blue"), lty = 1, cex=0.8)
+cal = calibrate(f2, cmethod = 'KM', u = 24, B = 120)
 plot(cal, add = TRUE)
 
 #############
@@ -321,4 +390,24 @@ plot(cal, add = TRUE)
 #############
 
 #* How do I interpret this?
-#* 
+
+
+####################
+# Presenting model #
+####################
+
+plot(summary(f2, ap=c(1,20)), log=TRUE, main = '')
+
+surv = Survival(f2)
+surv3 = function(x) surv(3*12, lp=x)
+surv5 = function(x) surv(5*12, lp=x)
+quan = Quantile(f2)
+med = function(x) quan(lp=x/12)
+ss = c(0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95)
+
+non = nomogram(f2,
+  fun=list(surv3, surv5, med),
+  funlabel = c('Survival at 3 years', 'Survival at 5 years', 'Median Survival time (years)'),
+  fun.at = list(ss,ss,c(.5,1:6)))
+
+
