@@ -63,6 +63,8 @@ age = impute(w, age, data = prostate)
 wt = impute(w, wt, data = prostate)
 ekg = impute(w, ekg, data = prostate)
 
+
+
 #  bind data to datadist object, this is a utility function to direct functions from to this data object
 dd = datadist(prostate); options(datadist = 'dd')
 units(dtime) = 'Month'
@@ -135,7 +137,7 @@ dd = datadist(dd, heart, map) # add combined variables to datadist(dd)
 # create Cox model #
 ####################
 
-f = cph(S ~ rx + rcs(age,3) + wt + map + pf.coded + hg + sz + ap + bm,
+f = cph(S ~ rx + age + wt + map + pf.coded + hg + sz + rcs(ap, 3) + bm,
         x = TRUE, y = TRUE, surv = TRUE, time.inc = 5*12)
 
 ################
@@ -258,7 +260,9 @@ set.seed(1)
 # Validating the f2 model using bootstrapping of 300
 ####*** NOTE: you might want to use a larger bootstrap sample, say 1000
 ####*this may be crucial with small sample sizes.
-v = validate(f, B=1000)
+f = update(f, time.inc = 60)
+
+v = validate(f, u=60, B=1000)
 print(v)
 
 ###########################
@@ -316,22 +320,22 @@ plot(cal, add = TRUE)
 # set random seed
 set.seed(1)
 # set time interval where survival will be measured against, Note this was set before but for clarity we are reinstating this at 60 months (5years)
-f = update(f, time.inc = 30)
+f = update(f, time.inc = 45)
 # calibrate data set using bootstrap of 300 permutations (b), point in time to calibrate model 60 months (u) – this needs to be the same as time.inc, maximum dimensions (m) – not sure if this is number of predictors used? 
-cal = calibrate(f, B=1000, u=30, maxdim = 4)
+cal = calibrate(f, B=1000, u=45, maxdim = 4)
 # Plot results
 plot(cal, subtitles = FALSE) +
   legend(0.5,0.3, legend = c('expected', 'observed'), col=c("black", "blue"), lty = 1, cex=0.8)
 #add lines to plot to visualise over estimation of survival 
 abline(h=0.5, col="grey", lty = 2, cex = 1.5)
-abline(v=0.45, col = 'grey', lty = 2, cex = 0.5)
+abline(v=0.5, col = 'grey', lty = 2, cex = 0.5)
 # Include confidence intervals for the estimates of fraction surviving
 
 ###*** NOTE: you should have used u=30 if you wanted to compare with the previous smoothed calibration
 ###*Also, B=50 is way too small and should be equal to the previous, and the seed should be equal, too
 # set random seed
 set.seed(1)
-cal = calibrate(f, cmethod = 'KM', u = 30, B = 1000)
+cal = calibrate(f, cmethod = 'KM', u = 45, B = 1000)
 plot(cal, add = TRUE)
 
 
@@ -356,6 +360,8 @@ plot(cal, add = TRUE)
 #* we look at 24 months. This time the median survival fraction the model appears
 #* to slightly underestimate survival (~45%).
 #* I am not sure how to interret the confidence intervals.
+
+
 
 
 ####################
@@ -416,3 +422,29 @@ plot(sDxy, main='')
 
 
 summary(f)
+
+###################################
+# making a more parsinimous model #
+###################################
+
+# Developing a sub model based on linear predictors
+
+f.small = predict(f, type= 'lp')
+f.small
+
+#* create a new linear repression model based using the linear 
+#* predictors from the full model and remove variables of non-interest
+# 
+f.reduce = ols(f.small ~ rx + age +map + pf.coded + rcs(ap,3), sigma = 1)
+f.reduce
+
+anova(f.reduce)
+
+# get predicted values from reduced model
+x = predict(f.reduce)
+
+# plot the variation between predicted full model and reduced model
+plot(x, f.small)
+
+# Statisitically analyse relationship with Rho2 value (0.7 is good, 0 no relationship)
+spearman2(f.small~x, p=2)
