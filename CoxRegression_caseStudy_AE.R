@@ -155,6 +155,10 @@ anova(fx)
 
 print(f, latex = TRUE, coefs = FALSE)
 
+
+#* method for fginding optimum combination of variables for parsimous model. This
+#* method has been criticized for not being 'honest'.
+
 stepAIC(f)
 
 ###################
@@ -199,7 +203,7 @@ anova(f)
 # Next step  - data reduction to reduce degrees of freedom #
 ############################################################
 # summarising data to reduce Df either by combining variables or reducing the
-#  number of restricted cubic spline knots from 4 to 3
+# number of restricted cubic spline knots from 4 to 3
 #
 ############################################################
 
