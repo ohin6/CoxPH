@@ -252,6 +252,47 @@ par(mfrow=c(1,1))
 #* to suggest that the variables arenot proportional.
 
 ####################
+# Linearity
+#####################
+#* Note this is not essential but, poor linearity will reduce the predictive
+#* power of the model. Instead this can inform where to expend degrees of freedom
+#* when deciding to include restricted cubic splines.
+
+# get residuals
+rr<-resid(f) # martingale residuals
+
+#### plot residuals for each variable
+# allow multiple plots on same screen
+par(mfrow=c(2,2), 
+    oma = c(1,1,1,1) + 0.1,
+    mar = c(3.5,3.5,3.5,3.5) + 0.1)
+
+# dosage
+
+# 
+plot(age,rr, xlab='age',ylab='residual')
+lines(lowess(age,rr,iter=0),lty=2, col = 2, lwd = 2)
+
+plot(wt,rr,xlab='wt',ylab='residual')
+lines(lowess(wt,rr,iter=0),lty=2, col = 2, lwd = 2)
+
+plot(map,rr,xlab='map',ylab='residual')
+lines(lowess(map,rr,iter=0),lty=2, col = 2, lwd = 2)
+
+
+plot(sz,rr,xlab='sz',ylab='residual')
+lines(lowess(sz,rr,iter=0),lty=2, col = 2, lwd = 2)
+
+
+# plots settings to default
+par(mfrow=c(1,1))
+par(mar = c(4, 4, 4, 4))
+
+#* From the plots it can be observed that all continious variables exhibit 
+#* strong degree of linearity. suggesting high predictive power and no need to
+#* expend extra df on variable. 
+
+####################
 # Validating model #
 ####################
 
